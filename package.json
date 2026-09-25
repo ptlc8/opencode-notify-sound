@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "install-plugin": "bun scripts/install.mjs",
+    "test": "bun test"
+  },
   "peerDependencies": {
     "@opencode-ai/plugin": "^1.0.0"
   }

@@ -1,16 +1,40 @@
 import type { Plugin } from "@opencode-ai/plugin"
 
-// Joue un son système macOS quand la session passe en idle (l'agent a fini).
-// Note: BEL (\a) ne fonctionne pas ici — les plugins n'ont pas de TTY.
-
 export const NotifySoundPlugin: Plugin = async ({ $ }) => {
+  const completedSessions = new Set<string>()
   return {
     event: async ({ event }) => {
-      if (event?.type !== "session.idle") return
+      let sound = "Ping"
+      switch (event.type) {
+        case "message.updated": {
+          const message = event.properties.info
+          if (message.role === "assistant" && message.summary) return
+          completedSessions.delete(message.sessionID)
+          if (message.role === "assistant" && message.finish === "stop" && message.time.completed !== undefined && !message.error) {
+            completedSessions.add(message.sessionID)
+          }
+          return
+        }
+        case "session.error":
+          if (event.properties.sessionID) completedSessions.delete(event.properties.sessionID)
+          return
+        case "session.status":
+          if (event.properties.status.type === "busy") completedSessions.delete(event.properties.sessionID)
+          return
+        case "session.deleted":
+          completedSessions.delete(event.properties.info.id)
+          return
+        case "session.idle":
+          if (!completedSessions.delete(event.properties.sessionID)) return
+          sound = "Glass"
+          break
+        default:
+          if (!["permission.asked", "question.asked"].includes(event.type)) return
+      }
       try {
-        await $`afplay /System/Library/Sounds/Glass.aiff`.quiet().nothrow()
+        await $`afplay ${"/System/Library/Sounds/" + sound + ".aiff"}`.quiet().nothrow()
       } catch {
-        // afplay indisponible — silencieux
+        // Audio is best-effort: an unavailable player must not interrupt the agent.
       }
     },
   }
