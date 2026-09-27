@@ -27,9 +27,11 @@ test("requests play Ping; replies and unrelated events stay silent", async () =>
   expect(calls).toEqual(["/System/Library/Sounds/Ping.aiff", "/System/Library/Sounds/Ping.aiff"])
 })
 
-test("successful completion plays Glass once, only for its session", async () => {
+test("successful completion survives OpenCode's final busy event and plays Glass once", async () => {
   const { calls, emit, message } = await setup()
   await message()
+  // OpenCode 1.18.33 starts its final loop iteration with busy before checking finish.
+  await emit("session.status", { status: { type: "busy" } })
   await emit("session.idle", { sessionID: "b" })
   await emit("session.status", { status: { type: "idle" } })
   expect(calls).toEqual([])
@@ -54,7 +56,6 @@ test("interrupts, errors, tools and summaries never qualify as completion", asyn
 test("new activity, errors and deletion clear completion; the next run can still finish", async () => {
   const { calls, emit, message } = await setup()
   for (const [type, properties] of [
-    ["session.status", { status: { type: "busy" } }],
     ["message.updated", { info: { sessionID: "a", role: "user" } }],
     ["message.updated", { info: { sessionID: "a", role: "assistant", time: {} } }],
     ["session.error", { error: { name: "MessageAbortedError" } }],

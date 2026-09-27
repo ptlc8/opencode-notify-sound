@@ -18,9 +18,6 @@ export const NotifySoundPlugin: Plugin = async ({ $ }) => {
         case "session.error":
           if (event.properties.sessionID) completedSessions.delete(event.properties.sessionID)
           return
-        case "session.status":
-          if (event.properties.status.type === "busy") completedSessions.delete(event.properties.sessionID)
-          return
         case "session.deleted":
           completedSessions.delete(event.properties.info.id)
           return
