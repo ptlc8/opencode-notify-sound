@@ -1,17 +1,20 @@
-import { expect, mock, test } from "bun:test"
+import { afterEach, expect, mock, spyOn, test } from "bun:test"
+import * as childProcess from "node:child_process"
 import type { Plugin } from "@opencode-ai/plugin"
-import { NotifySoundPlugin } from "./notify-sound"
+import plugin from "./notify-sound"
+
+afterEach(() => mock.restore())
 
 async function setup(fail = false) {
   const calls: unknown[] = []
-  const $ = (_: TemplateStringsArray, sound: unknown) => {
-    calls.push(sound)
-    return { quiet: () => ({ nothrow: async () => {
-      if (fail) throw new Error("afplay unavailable")
-    } }) }
-  }
+  spyOn(childProcess, "execFile").mockImplementation(((...args: any[]) => {
+    expect(args[0]).toBe("afplay")
+    calls.push(args[1][0])
+    args[3](fail ? new Error("afplay unavailable") : null)
+    return {} as ReturnType<typeof childProcess.execFile>
+  }) as typeof childProcess.execFile)
   const get = mock(async (): Promise<{ data?: { parentID?: string } }> => ({ data: {} }))
-  const hooks = await NotifySoundPlugin({ $, client: { session: { get } } } as unknown as Parameters<Plugin>[0])
+  const hooks = await plugin.server({ client: { session: { get } } } as unknown as Parameters<Plugin>[0])
   const emit = (type: string, properties: Record<string, unknown> = {}) =>
     hooks.event!({ event: { type, properties: { sessionID: "a", ...properties } } } as never)
   const message = (info = {}) => emit("message.updated", { info: {
