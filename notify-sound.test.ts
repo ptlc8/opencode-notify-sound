@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { expect, mock, test } from "bun:test"
 import type { Plugin } from "@opencode-ai/plugin"
 import { NotifySoundPlugin } from "./notify-sound"
 
@@ -10,13 +10,14 @@ async function setup(fail = false) {
       if (fail) throw new Error("afplay unavailable")
     } }) }
   }
-  const hooks = await NotifySoundPlugin({ $ } as unknown as Parameters<Plugin>[0])
+  const get = mock(async (): Promise<{ data?: { parentID?: string } }> => ({ data: {} }))
+  const hooks = await NotifySoundPlugin({ $, client: { session: { get } } } as unknown as Parameters<Plugin>[0])
   const emit = (type: string, properties: Record<string, unknown> = {}) =>
     hooks.event!({ event: { type, properties: { sessionID: "a", ...properties } } } as never)
   const message = (info = {}) => emit("message.updated", { info: {
     sessionID: "a", role: "assistant", finish: "stop", time: { completed: 1 }, ...info,
   } })
-  return { calls, emit, message }
+  return { calls, emit, message, get }
 }
 
 test("requests play Ping; replies and unrelated events stay silent", async () => {
@@ -74,4 +75,22 @@ test("new activity, errors and deletion clear completion; the next run can still
 test("playback failures do not interrupt the agent", async () => {
   const { emit } = await setup(true)
   await expect(emit("permission.asked")).resolves.toBeUndefined()
+})
+
+test("subagent completion is silent", async () => {
+  const { calls, emit, message, get } = await setup()
+  get.mockResolvedValue({ data: { parentID: "parent" } })
+  await message()
+  await emit("session.idle")
+  expect(calls).toEqual([])
+})
+
+test("unavailable session metadata stays silent without breaking the plugin", async () => {
+  const { calls, emit, message, get } = await setup()
+  get.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("offline"))
+  for (let i = 0; i < 2; i++) {
+    await message()
+    await expect(emit("session.idle")).resolves.toBeUndefined()
+    expect(calls).toEqual([])
+  }
 })

@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
 
-export const NotifySoundPlugin: Plugin = async ({ $ }) => {
+export const NotifySoundPlugin: Plugin = async ({ $, client }) => {
   const completedSessions = new Set<string>()
   return {
     event: async ({ event }) => {
@@ -21,10 +21,13 @@ export const NotifySoundPlugin: Plugin = async ({ $ }) => {
         case "session.deleted":
           completedSessions.delete(event.properties.info.id)
           return
-        case "session.idle":
+        case "session.idle": {
           if (!completedSessions.delete(event.properties.sessionID)) return
+          const session = await client.session.get({ path: { id: event.properties.sessionID } }).catch(() => undefined)
+          if (!session?.data || session.data.parentID) return
           sound = "Glass"
           break
+        }
         default:
           if (!["permission.asked", "question.asked"].includes(event.type)) return
       }
